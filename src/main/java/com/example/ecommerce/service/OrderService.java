@@ -13,6 +13,7 @@ import com.example.ecommerce.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -125,9 +126,13 @@ public class OrderService {
     }
 
     @Transactional(readOnly = true)
-    public OrderResponse getOrderById(Long id) {
+    public OrderResponse getOrderById(Long id, String username, boolean isAdmin) {
         Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay don hang id: " + id));
+                
+        if (!isAdmin && !order.getUser().getUsername().equals(username)){
+                throw new AccessDeniedException("User khong co quyen xem don hang nay!")
+        }
         return toResponse(order);
     }
 

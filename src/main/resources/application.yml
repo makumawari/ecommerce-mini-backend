@@ -35,7 +35,7 @@ spring:
         format_sql: true
     database-platform: org.hibernate.dialect.H2Dialect
 
-# ====== JWT CONFIG ======
+# ====== JWT CONFIG (move to environment on next phase)======
 jwt:
   # Trong thuc te, secret phai dat trong bien moi truong, KHONG hardcode nhu the nay.
   secret: "ThisIsADemoSecretKeyForJWT_PleaseChangeInProduction_MakeItLongEnough123456"
