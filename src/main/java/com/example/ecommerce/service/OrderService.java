@@ -131,7 +131,7 @@ public class OrderService {
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay don hang id: " + id));
                 
         if (!isAdmin && !order.getUser().getUsername().equals(username)){
-                throw new AccessDeniedException("User khong co quyen xem don hang nay!")
+                throw new AccessDeniedException("User khong co quyen xem don hang nay!");
         }
         return toResponse(order);
     }

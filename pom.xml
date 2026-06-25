@@ -54,22 +54,12 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!--
-        Neu muon dung MySQL/PostgreSQL thuc thay vi H2, comment dependency H2 o tren
-        va mo comment 1 trong 2 dependency duoi day, roi sua application.yml tuong ung.
-
-        <dependency>
-            <groupId>com.mysql</groupId>
-            <artifactId>mysql-connector-j</artifactId>
-            <scope>runtime</scope>
-        </dependency>
-
+        <!-- PostgreSQL: dung khi chay voi profile "docker" (xem application-docker.yml) -->
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
         </dependency>
-        -->
 
         <!-- JWT: tao va xac thuc token -->
         <dependency>

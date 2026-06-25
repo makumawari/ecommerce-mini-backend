@@ -1,7 +1,6 @@
 target/
-*.class
+.git/
 .idea/
 *.iml
 .vscode/
-HELP.md
 .env

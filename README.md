@@ -3,12 +3,17 @@
 Project luyện tập phỏng vấn Java Developer 1 YOE — đầy đủ 5 tiêu chí: Pagination,
 Transaction, Spring Security + JWT, Global Exception Handling, Unit Test (JUnit5 + Mockito).
 
-## 1. Yêu cầu môi trường
+Project hỗ trợ 2 cách chạy: **chạy local với H2** (nhanh, không cần cài gì, phù hợp lúc code/test)
+hoặc **chạy bằng Docker với PostgreSQL** (giống môi trường thật, data không mất khi tắt máy).
+
+## 1. Cách 1 — Chạy local với H2 (mặc định, không cần Docker)
+
+### Yêu cầu môi trường
 - JDK 17+
 - Maven 3.6+
 - Không cần cài database — project dùng **H2 in-memory**, chạy xong mất dữ liệu, khởi động lại tự seed lại.
 
-## 2. Cách chạy
+### Cách chạy
 
 ```bash
 cd ecommerce-mini-backend
@@ -29,6 +34,46 @@ mvn test
 Xem dữ liệu trong DB lúc app đang chạy: mở `http://localhost:8080/h2-console`
 - JDBC URL: `jdbc:h2:mem:ecommerce_db`
 - Username: `sa`, Password: (để trống)
+
+## 2. Cách 2 — Chạy bằng Docker với PostgreSQL (khuyên dùng để demo/chạy trên máy khác)
+
+### Yêu cầu môi trường
+- Docker + Docker Compose (Docker Desktop trên Windows/Mac)
+- Không cần cài JDK/Maven/PostgreSQL thủ công — toàn bộ chạy trong container.
+
+### Cách chạy
+
+```bash
+cd ecommerce-mini-backend
+cp .env.example .env     # tạo file .env, sửa POSTGRES_PASSWORD và JWT_SECRET thành giá trị riêng
+docker compose up -d     # build image + chạy app + PostgreSQL
+```
+
+App chạy ở `http://localhost:8080`, PostgreSQL chạy ở `localhost:5432`.
+
+Xem log:
+```bash
+docker compose logs -f app
+```
+
+Dừng (giữ lại data):
+```bash
+docker compose down
+```
+
+Dừng và xoá luôn data (chỉ dùng khi muốn reset sạch từ đầu):
+```bash
+docker compose down -v
+```
+
+**Vì sao không mất data khi tắt máy?** PostgreSQL được lưu vào Docker named volume
+(`postgres_data` trong [docker-compose.yml](docker-compose.yml)) — volume này tồn tại độc lập
+với container, chỉ mất khi chủ động xoá bằng `docker compose down -v`. Restart máy, restart
+Docker Desktop, hay `docker compose down` thường (không `-v`) đều giữ nguyên data.
+
+**Lưu ý:** file `.env` chứa secret thật (password, JWT secret) nên KHÔNG được commit lên git
+(đã có trong `.gitignore`). Khi đem code sang máy khác, copy lại `.env.example` thành `.env`
+và tự đặt giá trị riêng.
 
 ## 3. Tài khoản có sẵn (do DataInitializer tự tạo lúc khởi động)
 | username | password | role  |
@@ -105,7 +150,15 @@ Kiểm tra lại tồn kho sản phẩm 1 — phải KHÔNG đổi so với trư
 curl "http://localhost:8080/api/orders/my" -H "Authorization: Bearer $USER_TOKEN"
 ```
 
-### Bước 9 — Thử gọi API sản phẩm không tồn tại -> kiểm tra format lỗi (Tiêu chí 4)
+### Bước 9 — Xem chi tiết 1 đơn hàng theo id — chỉ xem được đơn của chính mình
+```bash
+curl -i "http://localhost:8080/api/orders/1" -H "Authorization: Bearer $USER_TOKEN"
+```
+Nếu order id=1 thuộc về user khác (không phải user1), kết quả mong đợi: HTTP 403 Forbidden
+(không phải 200, không lộ data của người khác). ADMIN gọi cùng API với order bất kỳ thì luôn
+xem được (không bị giới hạn ownership).
+
+### Bước 10 — Thử gọi API sản phẩm không tồn tại -> kiểm tra format lỗi (Tiêu chí 4)
 ```bash
 curl -i "http://localhost:8080/api/products/9999"
 ```
@@ -118,6 +171,8 @@ curl -i "http://localhost:8080/api/products/9999"
 | 3. Security/JWT | `SecurityConfig`, `JwtUtil`, `JwtAuthFilter`, `CustomUserDetailsService` |
 | 4. Exception Handling | `GlobalExceptionHandler`, các class trong package `exception` |
 | 5. Unit Test | `OrderServiceTest`, `ProductServiceTest` |
+| Order ownership (chống IDOR) | `OrderController.getOrderById`, `OrderService.getOrderById` |
+| Docker / PostgreSQL | `Dockerfile`, `docker-compose.yml`, `application-docker.yml` |
 
 ## 6. Những điều CÓ THỂ bị hỏi thêm khi phỏng vấn (đã chuẩn bị sẵn câu trả lời trong code)
 - "Tại sao không dùng `findAll()`?" → xem comment trong `ProductService`.
@@ -126,3 +181,10 @@ curl -i "http://localhost:8080/api/products/9999"
 - "Tại sao lưu `price` ở cả `Product` và `OrderItem`?" → xem comment trong `OrderItem.java`
   (snapshot giá tại thời điểm mua).
 - "`@Transactional` rollback khi nào, không rollback khi nào?" → xem comment trong `OrderService.createOrder`.
+- "User A có xem được order của User B không?" → KHÔNG. `OrderService.getOrderById` so sánh
+  `order.getUser().getUsername()` với username trong JWT, không khớp thì throw
+  `AccessDeniedException` → 403 (trừ ADMIN được bypass check). Đây là ví dụ về **IDOR**
+  (Insecure Direct Object Reference) — lỗi bảo mật kinh điển khi chỉ check role mà quên check
+  ownership của dữ liệu cụ thể.
+- "Vì sao Postgres trong Docker không mất data khi tắt máy?" → xem mục Docker ở trên, dùng
+  **named volume** thay vì lưu trong filesystem của container.
