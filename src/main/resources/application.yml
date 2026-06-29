@@ -29,11 +29,16 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update   # Tu dong tao/cap nhat bang theo Entity. Production thuong dung "validate" + migration tool (Flyway/Liquibase).
-    show-sql: true       # In cau SQL ra console - rat huu ich de hoc va debug
+    show-sql: false       # In cau SQL ra console - rat huu ich de hoc va debug
     properties:
       hibernate:
         format_sql: true
     database-platform: org.hibernate.dialect.H2Dialect
+
+# logging:
+#   level:
+#     org.hibernate.SQL: DEBUG
+#     org.hibernate.orm.jdbc.bind: TRACE   # bonus: in luôn giá trị tham số thay vì chỉ thấy "?"
 
 # ====== JWT CONFIG (move to environment on next phase)======
 jwt:
