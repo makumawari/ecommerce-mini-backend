@@ -34,7 +34,7 @@ public class ProductService {
      */
     @Transactional(readOnly = true) // readOnly = true: Hibernate toi uu, khong can theo doi thay doi entity vi chi doc
     public Page<ProductResponse> getAllProducts(Pageable pageable) {
-        Page<Product> productPage = productRepository.findAll(pageable);
+        Page<Product> productPage = productRepository.findAllWithCategory(pageable);
         return productPage.map(this::toResponse);
     }
 

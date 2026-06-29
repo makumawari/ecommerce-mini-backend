@@ -21,6 +21,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * TIEU CHI 2: Xu ly don hang voi @Transactional.
@@ -122,14 +124,33 @@ public class OrderService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay user: " + username));
 
-        return orderRepository.findByUserId(user.getId(), pageable).map(this::toResponse);
+        // BUOC 1: lay danh sach Order CO PHAN TRANG (LIMIT/OFFSET dung o DB).
+        // O day Order.items VAN la proxy rong, chua dung den nen chua trigger query nao them.
+        Page<Order> orderPage = orderRepository.findByUserId(user.getId(), pageable);
+        if (orderPage.isEmpty()) {
+            return orderPage.map(this::toResponse);
+        }
+
+        // BUOC 2: chi voi DUNG cac order nam trong trang nay (vi du 10 order),
+        // goi 1 query DUY NHAT lay full items + product cua chung.
+        // FIX N+1: truoc day moi order trigger 1 query items + moi item trigger
+        // 1 query product (co the 30+ query); gio chi con DUNG 1 query o buoc nay.
+        List<Long> orderIds = orderPage.getContent().stream().map(Order::getId).toList();
+        Map<Long, Order> fullOrdersById = orderRepository.findAllWithItemsByIdIn(orderIds).stream()
+                .collect(Collectors.toMap(Order::getId, o -> o));
+
+        // Map lai tu danh sach "day du" o buoc 2, nhung GIU NGUYEN thu tu/sort
+        // cua orderPage o buoc 1 (JOIN FETCH co the tra ve thu tu khac voi yeu cau sort ban dau).
+        return orderPage.map(o -> toResponse(fullOrdersById.get(o.getId())));
     }
 
     @Transactional(readOnly = true)
     public OrderResponse getOrderById(Long id, String username, boolean isAdmin) {
-        Order order = orderRepository.findById(id)
+        // FIX N+1: findByIdWithItems da JOIN FETCH san user + items + product,
+        // nen toResponse() ben duoi khong can query rieng nua.
+        Order order = orderRepository.findByIdWithItems(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay don hang id: " + id));
-                
+
         if (!isAdmin && !order.getUser().getUsername().equals(username)){
                 throw new AccessDeniedException("User khong co quyen xem don hang nay!");
         }

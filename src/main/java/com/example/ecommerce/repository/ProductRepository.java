@@ -4,20 +4,23 @@ import com.example.ecommerce.entity.Product;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 public interface ProductRepository extends JpaRepository<Product, Long> {
 
     /*
-     * QUAN TRONG: JpaRepository<Product, Long> da co san method findAll(Pageable pageable)
-     * tra ve Page<Product> - tu dong sinh ra cau SQL co LIMIT/OFFSET va ORDER BY.
-     * Day chinh la thu thay the cho findAll() khong phan trang.
+     * FIX N+1: JOIN FETCH p.category ép Hibernate lấy luôn category
+     * trong CÙNG 1 câu SQL (JOIN), thay vì để Product.category ở dạng
+     * proxy rỗng rồi phải query riêng từng cái khi code gọi getCategory().
      *
-     * Vi du Pageable duoc tao tu Controller:
-     *   Pageable pageable = PageRequest.of(page, size, Sort.by("price").ascending());
-     *   productRepository.findAll(pageable);
-     *
-     * Neu can loc theo ten san pham (tim kiem) + van phan trang, dung them method nay:
+     * An toàn để dùng cùng Pageable vì category là quan hệ @ManyToOne
+     * (mỗi product chỉ có 1 category) -> JOIN không làm nhân dòng kết quả,
+     * LIMIT/OFFSET vẫn được DB xử lý đúng, không bị cảnh báo
+     * "firstResult/maxResults specified with collection fetch".
      */
+    @Query("SELECT p FROM Product p JOIN FETCH p.category")
+    Page<Product> findAllWithCategory(Pageable pageable);
+    
     Page<Product> findByNameContainingIgnoreCase(String name, Pageable pageable);
 
     Page<Product> findByCategoryId(Long categoryId, Pageable pageable);
