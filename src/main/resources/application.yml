@@ -5,6 +5,12 @@ spring:
   application:
     name: ecommerce-mini-backend
 
+  data:
+    web:
+      pageable:
+        max-page-size: 50      # Client gui size > 50 se bi Spring tu dong clamp ve 50, chong vet can DB
+        one-indexed-parameters: false
+
   # ====== DATABASE: H2 in-memory ======
   # Chay ngay khong can cai dat gi, du lieu mat khi restart app (phu hop de luyen tap/demo).
   # Muon dung MySQL/PostgreSQL thuc thi doi block "datasource" duoi day, vi du voi MySQL:
