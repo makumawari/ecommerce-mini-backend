@@ -1,6 +1,7 @@
 package com.example.ecommerce.controller;
 
 import com.example.ecommerce.dto.request.CategoryRequest;
+import com.example.ecommerce.dto.response.CategoryResponse;
 import com.example.ecommerce.entity.Category;
 import com.example.ecommerce.repository.CategoryRepository;
 import jakarta.validation.Valid;
@@ -24,14 +25,25 @@ public class CategoryController {
     private final CategoryRepository categoryRepository;
 
     @GetMapping
-    public ResponseEntity<List<Category>> getAll() {
-        return ResponseEntity.ok(categoryRepository.findAll());
+    public ResponseEntity<List<CategoryResponse>> getAll() {
+        List<CategoryResponse> response = categoryRepository.findAll().stream()
+                .map(this::toResponse)
+                .toList();
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Category> create(@Valid @RequestBody CategoryRequest request) {
+    public ResponseEntity<CategoryResponse> create(@Valid @RequestBody CategoryRequest request) {
         Category category = Category.builder().name(request.getName()).build();
-        return ResponseEntity.status(HttpStatus.CREATED).body(categoryRepository.save(category));
+        Category saved = categoryRepository.save(category);
+        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(saved));
+    }
+
+    private CategoryResponse toResponse(Category category) {
+        return CategoryResponse.builder()
+                .id(category.getId())
+                .name(category.getName())
+                .build();
     }
 }
