@@ -1,102 +1,188 @@
 # E-Commerce Mini Backend
 
-Project luyện tập phỏng vấn Java Developer 1 YOE — đầy đủ 5 tiêu chí: Pagination,
-Transaction, Spring Security + JWT, Global Exception Handling, Unit Test (JUnit5 + Mockito).
+A side project for Java Backend Developer.
+It demonstrates five core criteria in a single, runnable codebase:
+**Pagination**, **Transaction**, **Spring Security + JWT**, **Global Exception Handling**, and **Unit Testing** (JUnit 5 + Mockito).
 
-Project hỗ trợ 2 cách chạy: **chạy local với H2** (nhanh, không cần cài gì, phù hợp lúc code/test)
-hoặc **chạy bằng Docker với PostgreSQL** (giống môi trường thật, data không mất khi tắt máy).
+The project supports two run modes: **local with H2** (no setup required, ideal for development) and **Docker + PostgreSQL** (production-like, data persists across restarts).
 
-## 1. Cách 1 — Chạy local với H2 (mặc định, không cần Docker)
+---
 
-### Yêu cầu môi trường
-- JDK 17+
-- Maven 3.6+
-- Không cần cài database — project dùng **H2 in-memory**, chạy xong mất dữ liệu, khởi động lại tự seed lại.
+## Tech Stack
 
-### Cách chạy
+| Layer | Technology |
+|---|---|
+| Language | Java 17 |
+| Framework | Spring Boot 3.2.5 |
+| Security | Spring Security + JWT (JJWT 0.11.5) |
+| Persistence | Spring Data JPA / Hibernate |
+| Database (local) | H2 in-memory |
+| Database (Docker) | PostgreSQL 16 |
+| Build | Maven 3.6+ |
+| Testing | JUnit 5 + Mockito |
+| Containerization | Docker + Docker Compose |
+
+---
+
+## Key Implementation Highlights
+
+| Criterion | What was implemented |
+|---|---|
+| **1. Pagination** | `GET /api/products` and `GET /api/orders/my` return a custom `PageResponse<T>` wrapper with `page`, `pageSize`, `totalElements`, `totalPages`, and `content`. Client controls page/size/sort via query params. Max page size capped at 50 via `spring.data.web.pageable.max-page-size` to prevent DB exhaustion. |
+| **2. Transaction** | `OrderService.createOrder` runs inside a single `@Transactional` — stock is decremented and the order is saved atomically. Any failure (e.g. insufficient stock) triggers a full rollback. `@Transactional(readOnly = true)` is used for all query-only methods. |
+| **3. Security / JWT** | Stateless JWT authentication via `JwtAuthFilter`. Role-based access control (`ROLE_USER`, `ROLE_ADMIN`) enforced with `@PreAuthorize`. IDOR protection: `GET /api/orders/{id}` verifies the requesting user owns the order (or is ADMIN) before returning data — role check alone is not sufficient. |
+| **4. Exception Handling** | `GlobalExceptionHandler` catches `ResourceNotFoundException` (404), `InsufficientStockException` (400), `AccessDeniedException` (403), validation errors (400), and all uncaught exceptions (500). Every error response follows a consistent `ErrorResponse` JSON structure — no raw stack traces exposed to clients. |
+| **5. Unit Test** | `OrderServiceTest` and `ProductServiceTest` cover happy-path and edge cases (insufficient stock, product not found, order not found) using Mockito mocks — no Spring context or real DB needed. |
+
+**Bonus design decisions worth knowing:**
+- **Optimistic Locking** (`@Version` on `Product`) prevents oversell when two requests attempt to purchase the last item concurrently — the second transaction gets an `ObjectOptimisticLockingFailureException` and is rejected.
+- **Price snapshot** — `OrderItem` stores `price` at the time of purchase, not a foreign key to the current product price. This preserves order history correctly even if prices change later.
+- **DTO layer** — all controllers return dedicated response DTOs (`ProductResponse`, `OrderResponse`, `CategoryResponse`, etc.) rather than raw JPA entities, avoiding lazy-loading exceptions during JSON serialization.
+
+---
+
+## Getting Started
+
+### Option 1 — Local with H2 (no Docker, no database setup)
+
+**Requirements:** JDK 17+, Maven 3.6+
 
 ```bash
-cd ecommerce-mini-backend
-mvn clean install      # tải dependency + build + chạy unit test luôn (Tiêu chí 5)
-mvn spring-boot:run    # chạy app, mặc định ở http://localhost:8080
+# Build + run all unit tests + start the app
+mvn clean install
+mvn spring-boot:run
 ```
 
-Nếu chỉ muốn build mà KHÔNG chạy test (để chạy nhanh hơn lúc dev):
+App runs at `http://localhost:8080`.
+
 ```bash
+# Build only, skip tests (faster iteration)
 mvn clean install -DskipTests
-```
 
-Chỉ chạy riêng test (Tiêu chí 5):
-```bash
+# Run tests only
 mvn test
 ```
 
-Xem dữ liệu trong DB lúc app đang chạy: mở `http://localhost:8080/h2-console`
-- JDBC URL: `jdbc:h2:mem:ecommerce_db`
-- Username: `sa`, Password: (để trống)
+While the app is running, inspect the in-memory database at `http://localhost:8080/h2-console`:
+- **JDBC URL:** `jdbc:h2:mem:ecommerce_db`
+- **Username:** `sa` | **Password:** *(leave empty)*
 
-## 2. Cách 2 — Chạy bằng Docker với PostgreSQL (khuyên dùng để demo/chạy trên máy khác)
+> Data is lost on every restart — `DataInitializer` re-seeds it automatically on startup.
 
-### Yêu cầu môi trường
-- Docker + Docker Compose (Docker Desktop trên Windows/Mac)
-- Không cần cài JDK/Maven/PostgreSQL thủ công — toàn bộ chạy trong container.
+---
 
-### Cách chạy
+### Option 2 — Docker + PostgreSQL (recommended for demo / running on another machine)
+
+**Requirements:** Docker Desktop (includes Docker Compose)
 
 ```bash
-cd ecommerce-mini-backend
-cp .env.example .env     # tạo file .env, sửa POSTGRES_PASSWORD và JWT_SECRET thành giá trị riêng
-docker compose up -d     # build image + chạy app + PostgreSQL
-```
+# 1. Copy the env template and fill in your own values
+cp .env.example .env
+#    Edit .env: set POSTGRES_PASSWORD and JWT_SECRET to something non-trivial
 
-App chạy ở `http://localhost:8080`, PostgreSQL chạy ở `localhost:5432`.
+# 2. Build the image and start both containers
+docker compose up -d
 
-Xem log:
-```bash
+# 3. Follow app logs
 docker compose logs -f app
 ```
 
-Dừng (giữ lại data):
+App runs at `http://localhost:8080`. PostgreSQL is available at `localhost:5432`.
+
 ```bash
+# Stop containers but keep PostgreSQL data (volume survives)
 docker compose down
-```
 
-Dừng và xoá luôn data (chỉ dùng khi muốn reset sạch từ đầu):
-```bash
+# Stop containers AND delete all data (full reset)
 docker compose down -v
+
+# Rebuild after code changes
+docker compose build app && docker compose up -d
 ```
 
-**Vì sao không mất data khi tắt máy?** PostgreSQL được lưu vào Docker named volume
-(`postgres_data` trong [docker-compose.yml](docker-compose.yml)) — volume này tồn tại độc lập
-với container, chỉ mất khi chủ động xoá bằng `docker compose down -v`. Restart máy, restart
-Docker Desktop, hay `docker compose down` thường (không `-v`) đều giữ nguyên data.
+**Why does data survive shutdown?**
+PostgreSQL data is stored in the Docker named volume `postgres_data` (defined in `docker-compose.yml`). This volume exists independently of the container — it survives `docker compose down`, machine restarts, and Docker Desktop restarts. Only `docker compose down -v` removes it.
 
-**Lưu ý:** file `.env` chứa secret thật (password, JWT secret) nên KHÔNG được commit lên git
-(đã có trong `.gitignore`). Khi đem code sang máy khác, copy lại `.env.example` thành `.env`
-và tự đặt giá trị riêng.
+> `.env` contains real secrets (password, JWT key) and is listed in `.gitignore` — never commit it. Use `.env.example` as the template when cloning to a new machine.
 
-## 3. Tài khoản có sẵn (do DataInitializer tự tạo lúc khởi động)
-| username | password | role  |
+---
+
+## Pre-seeded Data
+
+`DataInitializer` runs on every startup and creates the following data if the tables are empty.
+
+### Accounts
+
+| Username | Password | Role  |
 |----------|----------|-------|
 | admin    | admin123 | ADMIN |
+| manager  | admin123 | ADMIN |
 | user1    | user123  | USER  |
+| user2    | user123  | USER  |
+| user3    | user123  | USER  |
+| user4    | user123  | USER  |
+| user5    | user123  | USER  |
 
-Có sẵn 2 category: `Electronics` (id=1), `Books` (id=2).
+### Other seed data
 
-## 4. Luồng test API bằng curl (theo đúng thứ tự để dễ hiểu)
+| Type | Count | Notes |
+|---|---|---|
+| Categories | 6 | Electronics, Books, Fashion, Home & Kitchen, Sports, Toys |
+| Products | 25 | Spread across all 6 categories; one product has `stockQuantity = 0` to test out-of-stock validation |
+| Orders | 10 | Belong to user1–user5 with mixed statuses: PENDING / CONFIRMED / CANCELLED |
 
-### Bước 1 — Đăng nhập lấy token ADMIN
+---
+
+## API Quick Reference
+
+### Auth
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/api/auth/register` | None | Register a new USER account |
+| POST | `/api/auth/login` | None | Login — returns a JWT token |
+
+### Products
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/products` | None | List products (paginated, sortable) |
+| GET | `/api/products/{id}` | None | Get a single product |
+| POST | `/api/products` | ADMIN | Create a product |
+
+Query params for listing: `page` (0-indexed), `size` (max 50), `sort` (e.g. `price,desc`)
+
+### Categories
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/categories` | None | List all categories |
+| POST | `/api/categories` | ADMIN | Create a category |
+
+### Orders
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/api/orders` | USER / ADMIN | Place an order (transactional, decrements stock) |
+| GET | `/api/orders/my` | USER / ADMIN | List own orders (paginated) |
+| GET | `/api/orders/{id}` | USER / ADMIN | Get order by id — USER can only view their own orders |
+
+---
+
+## End-to-End Test Flow (curl)
+
+### Step 1 — Login as ADMIN, capture the token
+
 ```bash
-curl -X POST http://localhost:8080/api/auth/login \
+curl -s -X POST http://localhost:8080/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"admin123"}'
-```
-Copy giá trị `token` trong response, đặt vào biến để dùng tiếp:
-```bash
-ADMIN_TOKEN="<paste-token-vao-day>"
+
+ADMIN_TOKEN="<paste token here>"
 ```
 
-### Bước 2 — ADMIN tạo sản phẩm (Tiêu chí 3: chỉ ADMIN mới làm được)
+### Step 2 — ADMIN creates a product (criterion 3: role-based access)
+
 ```bash
 curl -X POST http://localhost:8080/api/products \
   -H "Content-Type: application/json" \
@@ -104,31 +190,35 @@ curl -X POST http://localhost:8080/api/products \
   -d '{"name":"Laptop Dell XPS 13","price":25000000,"stockQuantity":5,"categoryId":1}'
 ```
 
-### Bước 3 — Xem danh sách sản phẩm CÓ phân trang (Tiêu chí 1, không cần token)
+### Step 3 — List products with pagination (criterion 1)
+
 ```bash
+# page 0, 5 items per page, sorted by price descending
 curl "http://localhost:8080/api/products?page=0&size=5&sort=price,desc"
 ```
 
-### Bước 4 — Đăng ký + đăng nhập tài khoản USER mới (hoặc dùng user1/user123 có sẵn)
+### Step 4 — Login as USER
+
 ```bash
-curl -X POST http://localhost:8080/api/auth/login \
+curl -s -X POST http://localhost:8080/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"user1","password":"user123"}'
-```
-```bash
-USER_TOKEN="<paste-token-vao-day>"
+
+USER_TOKEN="<paste token here>"
 ```
 
-### Bước 5 — USER thử tạo sản phẩm -> phải bị từ chối 403 (Tiêu chí 3 + 4)
+### Step 5 — USER tries to create a product → must get 403 (criterion 3 + 4)
+
 ```bash
 curl -i -X POST http://localhost:8080/api/products \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -d '{"name":"Hack","price":1,"stockQuantity":1,"categoryId":1}'
+# Expected: HTTP 403, consistent JSON error body — no stack trace
 ```
-Kết quả mong đợi: HTTP 403, JSON message rõ ràng, KHÔNG phải stacktrace.
 
-### Bước 6 — USER tạo đơn hàng (Tiêu chí 2: @Transactional)
+### Step 6 — USER places an order (criterion 2: @Transactional)
+
 ```bash
 curl -X POST http://localhost:8080/api/orders \
   -H "Content-Type: application/json" \
@@ -136,55 +226,82 @@ curl -X POST http://localhost:8080/api/orders \
   -d '{"items":[{"productId":1,"quantity":2}]}'
 ```
 
-### Bước 7 — Thử mua vượt số lượng tồn -> phải bị từ chối + rollback
+### Step 7 — Try to exceed stock → must fail and rollback
+
 ```bash
 curl -i -X POST http://localhost:8080/api/orders \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $USER_TOKEN" \
   -d '{"items":[{"productId":1,"quantity":9999}]}'
+# Expected: HTTP 400, stock of product 1 unchanged (rollback verified)
 ```
-Kiểm tra lại tồn kho sản phẩm 1 — phải KHÔNG đổi so với trước lệnh này (vì rollback).
 
-### Bước 8 — Xem đơn hàng của chính mình
+### Step 8 — List own orders
+
 ```bash
-curl "http://localhost:8080/api/orders/my" -H "Authorization: Bearer $USER_TOKEN"
+curl "http://localhost:8080/api/orders/my" \
+  -H "Authorization: Bearer $USER_TOKEN"
 ```
 
-### Bước 9 — Xem chi tiết 1 đơn hàng theo id — chỉ xem được đơn của chính mình
+### Step 9 — Get order by id — IDOR protection check (criterion 3)
+
 ```bash
-curl -i "http://localhost:8080/api/orders/1" -H "Authorization: Bearer $USER_TOKEN"
-```
-Nếu order id=1 thuộc về user khác (không phải user1), kết quả mong đợi: HTTP 403 Forbidden
-(không phải 200, không lộ data của người khác). ADMIN gọi cùng API với order bất kỳ thì luôn
-xem được (không bị giới hạn ownership).
+# View an order that belongs to user1 — should succeed
+curl -i "http://localhost:8080/api/orders/1" \
+  -H "Authorization: Bearer $USER_TOKEN"
 
-### Bước 10 — Thử gọi API sản phẩm không tồn tại -> kiểm tra format lỗi (Tiêu chí 4)
+# View an order that belongs to a different user — must get 403
+# (find an order id from another user in the seed data, e.g. id=6 belongs to user3)
+curl -i "http://localhost:8080/api/orders/6" \
+  -H "Authorization: Bearer $USER_TOKEN"
+# Expected: HTTP 403 Forbidden — data of another user is never exposed
+
+# ADMIN can view any order
+curl -i "http://localhost:8080/api/orders/6" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+# Expected: HTTP 200
+```
+
+### Step 10 — Fetch a non-existent resource → check error format (criterion 4)
+
 ```bash
 curl -i "http://localhost:8080/api/products/9999"
+# Expected: HTTP 404, JSON with message field — no stack trace
 ```
 
-## 5. Map nhanh: Tiêu chí ↔️ File code tương ứng
-| Tiêu chí | File chính cần đọc |
+---
+
+## Criteria → Code Map
+
+| Criterion | Primary files |
 |---|---|
-| 1. Pagination/Sorting | `ProductController.getAllProducts`, `ProductService.getAllProducts` |
+| 1. Pagination | `ProductController.getAllProducts`, `ProductService.getAllProducts`, `PageResponse.java` |
 | 2. @Transactional | `OrderService.createOrder` |
-| 3. Security/JWT | `SecurityConfig`, `JwtUtil`, `JwtAuthFilter`, `CustomUserDetailsService` |
-| 4. Exception Handling | `GlobalExceptionHandler`, các class trong package `exception` |
+| 3. Security / JWT | `SecurityConfig`, `JwtUtil`, `JwtAuthFilter`, `CustomUserDetailsService` |
+| 3. IDOR protection | `OrderController.getOrderById`, `OrderService.getOrderById` |
+| 4. Exception Handling | `GlobalExceptionHandler`, `exception/` package |
 | 5. Unit Test | `OrderServiceTest`, `ProductServiceTest` |
-| Order ownership (chống IDOR) | `OrderController.getOrderById`, `OrderService.getOrderById` |
+| Optimistic Locking | `Product.java` (`@Version` field) |
 | Docker / PostgreSQL | `Dockerfile`, `docker-compose.yml`, `application-docker.yml` |
 
-## 6. Những điều CÓ THỂ bị hỏi thêm khi phỏng vấn (đã chuẩn bị sẵn câu trả lời trong code)
-- "Tại sao không dùng `findAll()`?" → xem comment trong `ProductService`.
-- "Làm sao tránh 2 người mua cùng lúc làm âm kho (oversell)?" → xem `@Version` trong `Product.java`
-  (Optimistic Locking) — đây là điểm cộng lớn nếu bạn tự nói ra được.
-- "Tại sao lưu `price` ở cả `Product` và `OrderItem`?" → xem comment trong `OrderItem.java`
-  (snapshot giá tại thời điểm mua).
-- "`@Transactional` rollback khi nào, không rollback khi nào?" → xem comment trong `OrderService.createOrder`.
-- "User A có xem được order của User B không?" → KHÔNG. `OrderService.getOrderById` so sánh
-  `order.getUser().getUsername()` với username trong JWT, không khớp thì throw
-  `AccessDeniedException` → 403 (trừ ADMIN được bypass check). Đây là ví dụ về **IDOR**
-  (Insecure Direct Object Reference) — lỗi bảo mật kinh điển khi chỉ check role mà quên check
-  ownership của dữ liệu cụ thể.
-- "Vì sao Postgres trong Docker không mất data khi tắt máy?" → xem mục Docker ở trên, dùng
-  **named volume** thay vì lưu trong filesystem của container.
+---
+
+## Common Interview Q&A
+
+**Why does `OrderItem` store `price` instead of referencing `Product.price`?**
+Prices change over time. Storing the price at the moment of purchase (snapshot) ensures order history is always accurate, regardless of future price updates.
+
+**When does `@Transactional` roll back?**
+By default, Spring rolls back on unchecked exceptions (`RuntimeException` and its subclasses). Checked exceptions do **not** trigger a rollback unless you explicitly configure `@Transactional(rollbackFor = ...)`. All custom exceptions in this project extend `RuntimeException` for this reason.
+
+**What is IDOR and how is it prevented here?**
+IDOR (Insecure Direct Object Reference) is when an API exposes internal object IDs and a user can access another user's data just by guessing the ID. `@PreAuthorize("hasAnyRole('USER','ADMIN')")` only checks *who can call the endpoint* — it cannot know *which order belongs to whom*. The fix is in `OrderService.getOrderById`: after loading the order from the DB, it compares `order.getUser().getUsername()` with the authenticated username from the JWT. If they don't match and the caller is not an ADMIN, an `AccessDeniedException` (→ HTTP 403) is thrown.
+
+**How does Optimistic Locking prevent oversell?**
+`Product` has a `@Version Long version` field. When two transactions read the same product and both try to update `stockQuantity`, Hibernate checks the version on write. The second commit finds the version incremented by the first and throws `ObjectOptimisticLockingFailureException` — the second purchase fails cleanly instead of silently corrupting stock data.
+
+**Why set `max-page-size` in `application.yml` instead of `@PageableDefault`?**
+`@PageableDefault` only sets the *fallback* value when the client sends no `size` param — it does not cap what the client *can* request. Without an explicit maximum, a client can call `?size=999999` and force a full table scan in one request (DoS risk). `spring.data.web.pageable.max-page-size: 50` is enforced by Spring's `PageableHandlerMethodArgumentResolver` and applies globally to every pageable endpoint without touching controller code.
+
+**Why doesn't PostgreSQL data disappear when the machine shuts down?**
+The `docker-compose.yml` mounts a Docker *named volume* (`postgres_data`) onto `/var/lib/postgresql/data`. Named volumes are managed by Docker and survive container stops, `docker compose down`, and machine reboots. Data is only removed when you explicitly run `docker compose down -v`.
